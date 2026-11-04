@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { auditContext } from '../lib/context.js';
-import { analyzeSession, findings, listProjects, listSessions, projectDir } from '../lib/sessions.js';
+import { analyzeSession, CARRY, compactSavings, findings, listProjects, listSessions, projectDir, REREAD } from '../lib/sessions.js';
 import { fmt, median, pct } from '../lib/util.js';
 
 const argv = process.argv.slice(2);
@@ -113,9 +113,13 @@ function tips(list, f, ctx) {
         ? 'Each subagent starts empty and reads the same file again. Pass the needed part in the subagent prompt instead of telling it to read the file.'
         : 'Re-reading usually follows edits or a compaction. Read only the lines you need (offset/limit), or note the key lines in your prompt.']);
   const long = list.filter((s) => s.peak >= 150000);
-  if (long.length)
-    out.push([`${long.length} sessions grew past 150k tokens of context; every request in them re-sent that much.`,
-      'Start a new session (/clear) when you switch tasks, and /compact with a short focus note before a long session gets heavy.']);
+  if (long.length) {
+    const sv = compactSavings(list);
+    const at100 = sv.caps.find((x) => x.cap === 100000);
+    // The biggest lever by far in every project we measured, so it goes first.
+    out.unshift([`${long.length} of ${list.length} sessions grew past 150k tokens of context; every request in them re-sent that much. Replayed with /compact at 100k, these ${list.length} sessions would have used ${fmt(at100.tokens)} instead of ${fmt(sv.actual)} input tokens (-${Math.round(at100.saved * 100)}%).`,
+      'Run /compact (with a one-line note of the task) when the context reaches ~100k, and /clear when you switch tasks. Write progress to a file first if the task is long.']);
+  }
   const write = list.reduce((s, x) => s + x.cacheWrite, 0), read = list.reduce((s, x) => s + x.cacheRead, 0);
   if (write + read > 0 && write / (write + read) > 0.2)
     out.push([`${pct(write, write + read)} of cached input was written fresh rather than read from cache.`,
@@ -162,9 +166,19 @@ function printContextNow(a) {
 
   const out = [];
   const top = msgs[0];
-  if (c.total >= 100000 && c.messages / c.total >= 0.6)
-    out.push([`Messages are ${pct(c.messages, c.total)} of a ${fmt(c.total)} context, re-sent with every request.`,
-      'Run /compact with a one-line note of what you are doing (it keeps a summary), or /clear when you move to another task.']);
+  const start = a.series[0]?.[0] || 0;
+  if (c.total >= 100000 && c.messages / c.total >= 0.6) {
+    const after = start + CARRY + REREAD;
+    out.push([`Messages are ${pct(c.messages, c.total)} of a ${fmt(c.total)} context, re-sent with every request. After /compact the next requests would be about ${fmt(after)} each instead of ${fmt(c.total)} (-${pct(c.total - after, c.total)}).`,
+      'Run /compact with a one-line note of what you are doing (it keeps a summary), or /clear when you move to another task. Do it again around 100k.']);
+  }
+  const sv = compactSavings([a]);
+  if (sv.actual) {
+    heading('This session with /compact at a fixed size (replayed on its real request sizes)');
+    console.log(`  as it went      ${fmt(sv.actual).padStart(7)} input tokens`);
+    for (const x of sv.caps) console.log(`  /compact at ${fmt(x.cap).padEnd(4)} ${fmt(x.tokens).padStart(7)}  ${green('-' + Math.round(x.saved * 100) + '%')}`);
+    console.log(dim(`  Assumes each /compact keeps ~${fmt(CARRY)} of summary and the agent re-reads ~${fmt(REREAD)} of files afterwards.`));
+  }
   if (top && top.tokens >= 15000) {
     const name = top.name.replace('Messages: ', '');
     const fix = /Read output/.test(name) ? 'Read only the lines you need (offset/limit) and Grep before reading whole files.'
