@@ -83,10 +83,11 @@ These are suggestions from the shape of the work, not a quality check: try the c
 npx token-diet install
 ```
 
-Adds two Claude Code hooks to `~/.claude/settings.json` (`--here` for this project only, `token-diet uninstall` removes them):
+Adds Claude Code hooks to `~/.claude/settings.json` (`--here` for this project only, `token-diet uninstall` removes them):
 
 - **Compact reminder.** When a session's context passes 150k tokens you get a one-line note to run `/compact`, again every
-  +50k, not on every message. Only you can run `/compact`, but on a week of real sessions compacting at 150k would have cut
+  +50k, not on every message. It shows when the agent finishes its turn (Stop hook), and the agent repeats it in its next
+  reply, for apps that do not show hook messages. Only you can run `/compact`, but on a week of real sessions compacting at 150k would have cut
   input tokens by about half.
 - **Output clip.** A Bash or PowerShell output over 16k characters (~4k tokens) is saved to `~/.claude/token-diet/out/` and
   the agent sees the first 60 and last 60 lines plus the file path, so it can grep the rest only if it needs it. End a

@@ -292,7 +292,7 @@ async function main() {
     const cfg = loadConfig();
     console.log(`${green('Installed')} in ${r.settings} (backup next to it as .token-diet.bak)\n`);
     console.log(`  ${bold('Compact reminder')}  when a session's context passes ${fmt(cfg.compactAt)} tokens, you get a line telling you to run /compact`);
-    console.log(`                    (again every +${fmt(cfg.every)}, not on every message).`);
+    console.log(`                    (again every +${fmt(cfg.every)}, not on every message), at the end of the agent's turn.`);
     if (!flags.has('--no-clip'))
       console.log(`  ${bold('Output clip')}       Bash/PowerShell output over ${fmt(cfg.clipChars)} chars (~${fmt(cfg.clipChars / 4)} tokens) is saved to a file and the agent sees the\n                    first ${cfg.headLines} and last ${cfg.tailLines} lines plus the path. End a command with "# full" to keep it whole.`);
     console.log(dim(`\n  Settings: ${r.config}\n  New sessions pick the hooks up; remove them with: token-diet uninstall${projectCwd ? ' --here' : ''}`));
