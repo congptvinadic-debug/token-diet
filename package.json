@@ -1,6 +1,6 @@
 {
   "name": "token-diet",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Spend fewer tokens in Claude Code: see where they go (instruction files, MCP tools, huge outputs, model per task), get a /compact reminder, clip huge outputs, and keep long context on disk with a handoff file. CLI and Claude Code plugin.",
   "type": "module",
   "bin": {
