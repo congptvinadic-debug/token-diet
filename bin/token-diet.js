@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import { auditContext } from '../lib/context.js';
 import { analyzeSession, CARRY, compactSavings, findings, listProjects, listSessions, projectDir, REREAD } from '../lib/sessions.js';
 import { fmt, median, pct } from '../lib/util.js';
+import { loadConfig } from '../lib/hook.js';
+import { install, uninstall } from '../lib/install.js';
 
 const argv = process.argv.slice(2);
 const VALUE_FLAGS = new Set(['--days', '--project', '--top']);
@@ -31,6 +33,9 @@ const HELP = `${bold('token-diet')}: find where your coding agent's tokens go, a
   ${cyan('token-diet session <id>')}       one session in detail (id prefix is enough)
   ${cyan('token-diet now')}                what fills the context of your latest session, like /context, and what to cut
   ${cyan('token-diet all')}                every project on this machine, biggest token users first
+  ${cyan('token-diet install')}            add Claude Code hooks: a /compact reminder past 150k, and clipping of huge
+                                command outputs (full text kept in a file). --here: this project only, --no-clip
+  ${cyan('token-diet uninstall')}          remove them
 
   --days <n>        look back n days (default 7)      --project <dir>   another project (default: current dir)
   --json            machine-readable output            --no-color
@@ -214,6 +219,23 @@ async function main() {
   const cmd = args[0];
   if (flags.has('--help') || cmd === 'help') return console.log(HELP);
   if (flags.has('--version')) return console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
+
+  if (cmd === 'install' || cmd === 'uninstall') {
+    const projectCwd = flags.has('--here') ? CWD : null;
+    if (cmd === 'uninstall') {
+      const r = uninstall({ projectCwd });
+      return console.log(r.removed ? `Removed token-diet hooks from ${r.settings}` : `No token-diet hooks in ${r.settings}`);
+    }
+    const r = install({ projectCwd, clip: !flags.has('--no-clip') });
+    const cfg = loadConfig();
+    console.log(`${green('Installed')} in ${r.settings} (backup next to it as .token-diet.bak)\n`);
+    console.log(`  ${bold('Compact reminder')}  when a session's context passes ${fmt(cfg.compactAt)} tokens, you get a line telling you to run /compact`);
+    console.log(`                    (again every +${fmt(cfg.every)}, not on every message).`);
+    if (!flags.has('--no-clip'))
+      console.log(`  ${bold('Output clip')}       Bash/PowerShell output over ${fmt(cfg.clipChars)} chars (~${fmt(cfg.clipChars / 4)} tokens) is saved to a file and the agent sees the\n                    first ${cfg.headLines} and last ${cfg.tailLines} lines plus the path. End a command with "# full" to keep it whole.`);
+    console.log(dim(`\n  Settings: ${r.config}\n  New sessions pick the hooks up; remove them with: token-diet uninstall${projectCwd ? ' --here' : ''}`));
+    return;
+  }
 
   if (cmd === 'context') {
     const ctx = auditContext(CWD);

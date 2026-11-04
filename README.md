@@ -57,6 +57,24 @@ What to cut in this context
      → Run /compact with a one-line note of what you are doing (it keeps a summary), or /clear when you move to another task.
 ```
 
+## Make it automatic
+
+```
+npx token-diet install
+```
+
+Adds two Claude Code hooks to `~/.claude/settings.json` (`--here` for this project only, `token-diet uninstall` removes them):
+
+- **Compact reminder.** When a session's context passes 150k tokens you get a one-line note to run `/compact`, again every
+  +50k, not on every message. Only you can run `/compact`, but on a week of real sessions compacting at 150k would have cut
+  input tokens by about half.
+- **Output clip.** A Bash or PowerShell output over 16k characters (~4k tokens) is saved to `~/.claude/token-diet/out/` and
+  the agent sees the first 60 and last 60 lines plus the file path, so it can grep the rest only if it needs it. End a
+  command with `# full` to keep the whole output. Saved outputs are deleted after 7 days.
+
+Limits live in `~/.claude/token-diet/config.json`: `compactAt`, `every`, `clipChars`, `headLines`, `tailLines`. The hook
+script is copied next to it, so it keeps working without the npm package, and any error in it means "no change".
+
 ## Commands
 
 ```
@@ -66,6 +84,8 @@ token-diet sessions           one line per session: requests, tokens, cache shar
 token-diet session <id>       one session in detail (an id prefix is enough)
 token-diet now                what fills the context of your latest session (like /context), and what to cut
 token-diet all                every project on this machine, biggest token users first
+token-diet install            add the hooks above (--here: this project only, --no-clip: reminder only)
+token-diet uninstall          remove them
 
 --days <n>   look back n days (default 7)     --project <dir>   another project
 --json       machine-readable output          --no-color
