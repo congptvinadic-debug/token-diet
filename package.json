@@ -1,0 +1,35 @@
+{
+  "name": "token-diet",
+  "version": "1.0.0",
+  "description": "Find where your coding agent's tokens go and what to cut: instruction files, MCP tool definitions, huge command outputs, re-read files and oversized sessions, from Claude Code's local logs.",
+  "type": "module",
+  "bin": {
+    "token-diet": "bin/token-diet.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "keywords": [
+    "claude-code",
+    "tokens",
+    "usage-limits",
+    "context-window",
+    "mcp",
+    "llm",
+    "cost",
+    "cli"
+  ],
+  "homepage": "https://github.com/congptvinadic-debug/token-diet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/congptvinadic-debug/token-diet.git"
+  },
+  "author": "StackVersus (https://getstackversus.com)",
+  "license": "MIT"
+}
