@@ -3,10 +3,16 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         node: [18, 20, 22]
+        include:
+          # One macOS job: hosted macOS runners are often short of capacity and cancel queued jobs.
+          - os: macos-latest
+            node: 22
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
