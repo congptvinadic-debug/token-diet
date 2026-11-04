@@ -3,10 +3,10 @@
 Find where your coding agent's tokens go, and what to cut.
 
 ```
-npx token-diet
+npx claude-token-diet
 ```
 
-Run it in a project folder. It reads Claude Code's local session logs (`~/.claude/projects/...`) and the instruction files your
+Run it in a project folder (after `npm i -g claude-token-diet` the command is just `token-diet`). It reads Claude Code's local session logs (`~/.claude/projects/...`) and the instruction files your
 agents load, and tells you:
 
 - **What every session starts with.** CLAUDE.md, AGENTS.md, rules files, the auto-memory index, and how much of the fixed request
@@ -100,7 +100,7 @@ These are suggestions from the shape of the work, not a quality check: try the c
 
 (On Claude Code older than 2.1.275: `/plugin marketplace add congptvinadic-debug/token-diet`, then `/plugin install token-diet@token-diet`.)
 That is all: the hooks below run from the next session, nothing to edit, and `/plugin` turns them off or removes them.
-Without the plugin system, `npx token-diet install` writes the same hooks into `~/.claude/settings.json` (`--here` for this
+Without the plugin system, `npx claude-token-diet install` writes the same hooks into `~/.claude/settings.json` (`--here` for this
 project only, `token-diet uninstall` removes them). Use one or the other; if both are there, only the plugin's hooks run.
 
 - **Compact reminder.** When a session's context passes 150k tokens you get a one-line note to run `/compact` or `/clear`,
