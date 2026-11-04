@@ -29,6 +29,7 @@ const HELP = `${bold('token-diet')}: find where your coding agent's tokens go, a
   ${cyan('token-diet context')}            only the instruction files and MCP servers loaded every session
   ${cyan('token-diet sessions')}           one line per session: requests, tokens, peak context
   ${cyan('token-diet session <id>')}       one session in detail (id prefix is enough)
+  ${cyan('token-diet now')}                what fills the context of your latest session, like /context, and what to cut
   ${cyan('token-diet all')}                every project on this machine, biggest token users first
 
   --days <n>        look back n days (default 7)      --project <dir>   another project (default: current dir)
@@ -146,6 +147,48 @@ function printFindings(list, f, ctx, title = `Last ${DAYS} days in this project`
   console.log(dim('\n  How much usage each plan gives: https://getstackversus.com/limits'));
 }
 
+// Breakdown of the context at the session's last request, like Claude Code's /context view, plus what to cut in it.
+function printContextNow(a) {
+  const c = a.contextNow;
+  if (!c) return;
+  heading(`Context now: ${fmt(c.total)} tokens (last request${c.compactions ? `, after ${c.compactions} compaction${c.compactions > 1 ? 's' : ''}` : ''})`);
+  const fixed = c.rows.filter((r) => !r.name.startsWith('Messages'));
+  const msgs = c.rows.filter((r) => r.name.startsWith('Messages'));
+  const line = (r, indent = '  ') => console.log(`${indent}${('~' + fmt(r.tokens)).padStart(7)}  ${pct(r.tokens, c.total).padStart(4)}  ${r.name.replace('Messages: ', '')}`);
+  console.log(`  ${('~' + fmt(c.messages)).padStart(7)}  ${pct(c.messages, c.total).padStart(4)}  ${bold('Messages')}`);
+  for (const r of msgs.slice(0, 8)) line(r, '    ');
+  for (const r of fixed) line(r);
+  console.log(dim('  Total is the real size of the last request; the split is estimated from characters.'));
+
+  const out = [];
+  const top = msgs[0];
+  if (c.total >= 100000 && c.messages / c.total >= 0.6)
+    out.push([`Messages are ${pct(c.messages, c.total)} of a ${fmt(c.total)} context, re-sent with every request.`,
+      'Run /compact with a one-line note of what you are doing (it keeps a summary), or /clear when you move to another task.']);
+  if (top && top.tokens >= 15000) {
+    const name = top.name.replace('Messages: ', '');
+    const fix = /Read output/.test(name) ? 'Read only the lines you need (offset/limit) and Grep before reading whole files.'
+      : /(Bash|PowerShell) output/.test(name) ? 'Cap command output (| head -50, | tail -30, quiet flags), or write it to a file and grep it.'
+      : /your messages/.test(name) ? 'Pasted logs and screenshots stay in context: paste the relevant part or crop the image.'
+      : /replies/.test(name) ? 'Ask for shorter answers (an output style or "be brief"), long replies stay in context too.'
+      : /reminders/.test(name) ? 'Hook output and repeated reminders pile up: keep hook messages short.'
+      : /mcp__|output/.test(name) ? 'This tool returns a lot each call: use its narrower calls or fewer calls per task.'
+      : 'Keep this part smaller or start fresh after it.';
+    out.push([`Biggest part of the messages: ${name} (~${fmt(top.tokens)}).`, fix]);
+  }
+  const get = (n) => fixed.find((r) => r.name === n)?.tokens || 0;
+  if (get('MCP tools') >= 10000) out.push([`MCP tool definitions take ~${fmt(get('MCP tools'))} on every request.`, 'Turn off MCP servers this project does not use.']);
+  if (get('Memory files') >= 5000) out.push([`Memory files (CLAUDE.md, AGENTS.md, memory index) take ~${fmt(get('Memory files'))}.`, 'Keep only rules the agent needs every time; move the rest into files it reads on demand.']);
+  if (get('Skills') >= 5000) out.push([`The skills list takes ~${fmt(get('Skills'))}.`, 'Remove or disable skills and plugins you do not use.']);
+  if (out.length) {
+    heading('What to cut in this context');
+    out.forEach(([why, fix], i) => {
+      console.log(`  ${bold(`${i + 1}.`)} ${why}`);
+      console.log(`     ${green('→')} ${fix}`);
+    });
+  }
+}
+
 async function load(days) {
   const sessions = listSessions(projectDir(CWD), days);
   const out = [];
@@ -195,6 +238,16 @@ async function main() {
   }
 
   const dir = projectDir(CWD);
+  if (cmd === 'now') {
+    // The most recently active session of this project (usually the one you are in).
+    const s = listSessions(dir, 3650)[0];
+    if (!s) return console.error(`No sessions in ${dir}`), process.exit(1);
+    const a = await analyzeSession(s);
+    if (JSON_OUT) return console.log(JSON.stringify(a.contextNow, null, 2));
+    console.log(dim(`Session ${a.id}`));
+    printContextNow(a);
+    return;
+  }
   if (cmd === 'session') {
     const id = args[1];
     const s = listSessions(dir, 3650).find((x) => x.id.startsWith(id || '\0'));
@@ -204,6 +257,7 @@ async function main() {
     printSessionsTable([a], `Session ${a.id}${a.subagents ? ` (+${a.subagents} subagents)` : ''}`);
     const defs = toolDefSummary(a.toolDefs);
     if (defs) console.log(dim(`\n  Tool definitions: ${share(defs.toolShare)} of the fixed request (${defs.count} tools)${defs.mcp.length ? `; MCP ${defs.mcp.map(([n, x]) => `${n} ${share(x)}`).join(', ')}` : ''}`));
+    printContextNow(a);
     printFindings([a], findings([a]), null, 'Totals');
     return;
   }

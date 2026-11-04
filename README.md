@@ -35,6 +35,28 @@ What to cut
        of telling it to read the file.
 ```
 
+## What is in your context right now
+
+```
+$ token-diet now
+Context now: 327k tokens (last request)
+    ~265k   81%  Messages
+      ~105k   32%  agent's replies and tool calls
+       ~34k   10%  PowerShell output
+       ~33k   10%  Bash output
+       ~29k    9%  Read output
+       ~17k    5%  your messages
+     ~27k    8%  System tools
+     ~12k    4%  MCP tools
+     ~11k    3%  System prompt
+    ~6.0k    2%  Skills
+    ~2.6k    1%  Memory files
+
+What to cut in this context
+  1. Messages are 81% of a 327k context, re-sent with every request.
+     → Run /compact with a one-line note of what you are doing (it keeps a summary), or /clear when you move to another task.
+```
+
 ## Commands
 
 ```
@@ -42,6 +64,8 @@ token-diet                    context files + the last 7 days of sessions in thi
 token-diet context            only the instruction files and MCP servers loaded every session
 token-diet sessions           one line per session: requests, tokens, cache share, start and peak context
 token-diet session <id>       one session in detail (an id prefix is enough)
+token-diet now                what fills the context of your latest session (like /context), and what to cut
+token-diet all                every project on this machine, biggest token users first
 
 --days <n>   look back n days (default 7)     --project <dir>   another project
 --json       machine-readable output          --no-color
@@ -55,6 +79,10 @@ token-diet session <id>       one session in detail (an id prefix is enough)
 - "Re-sent" is size x the number of later requests in the same session before the next compaction: the output stayed in
   context and went with each of them (mostly as cache reads, which are cheaper but still count).
 - Tool-definition shares come from the request shape newer Claude Code versions log; they are shares of characters, not tokens.
+- `now` splits the context like Claude Code's /context view. The two anchors are real usage: the first request (system prompt,
+  tools, skills, memory files: the fixed part) and the last request (everything). Messages = last - fixed, then split by tool
+  output, your messages, the agent's replies and reminders by characters. On a 312k-token session it landed within a few k of
+  /context per category.
 
 Codex CLI and other agents: instruction files (AGENTS.md, GEMINI.md, Cursor and Copilot rules) are audited; session analysis is
 Claude Code only for now. Pull requests welcome.
