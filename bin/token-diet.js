@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { auditContext } from '../lib/context.js';
-import { analyzeSession, findings, listSessions, projectDir } from '../lib/sessions.js';
+import { analyzeSession, findings, listProjects, listSessions, projectDir } from '../lib/sessions.js';
 import { fmt, median, pct } from '../lib/util.js';
 
 const argv = process.argv.slice(2);
@@ -29,6 +29,7 @@ const HELP = `${bold('token-diet')}: find where your coding agent's tokens go, a
   ${cyan('token-diet context')}            only the instruction files and MCP servers loaded every session
   ${cyan('token-diet sessions')}           one line per session: requests, tokens, peak context
   ${cyan('token-diet session <id>')}       one session in detail (id prefix is enough)
+  ${cyan('token-diet all')}                every project on this machine, biggest token users first
 
   --days <n>        look back n days (default 7)      --project <dir>   another project (default: current dir)
   --json            machine-readable output            --no-color
@@ -160,6 +161,37 @@ async function main() {
   if (cmd === 'context') {
     const ctx = auditContext(CWD);
     return JSON_OUT ? console.log(JSON.stringify(ctx, null, 2)) : printContext(ctx);
+  }
+
+  if (cmd === 'all') {
+    const rows = [];
+    for (const p of await listProjects(DAYS)) {
+      const list = [];
+      for (const s of p.sessions) list.push(await analyzeSession(s));
+      const used = list.filter((s) => s.calls > 0);
+      if (!used.length) continue;
+      const f = findings(used);
+      rows.push({
+        project: p.cwd || p.name,
+        sessions: used.length,
+        requests: used.reduce((a, s) => a + s.calls, 0),
+        input: used.reduce((a, s) => a + s.input + s.cacheWrite + s.cacheRead, 0),
+        output: used.reduce((a, s) => a + s.output, 0),
+        startMedian: median(used.map((s) => s.start).filter(Boolean)),
+        over150k: used.filter((s) => s.peak >= 150000).length,
+        topTool: f.byTool[0] ? `${toolName(f.byTool[0].tool)} ~${fmt(f.byTool[0].carriedTokens)}` : '-',
+        cuts: tips(used, f, null).length,
+      });
+    }
+    rows.splice(0, rows.length, ...rows.filter((r) => r.input > 0).sort((a, b) => b.input - a.input));
+    if (JSON_OUT) return console.log(JSON.stringify(rows, null, 2));
+    heading(`All projects, last ${DAYS} days (${rows.length})`);
+    const total = rows.reduce((a, r) => a + r.input, 0);
+    console.log(dim('  input     share  sessions  start ctx  >150k  most re-sent tool output       cuts  project'));
+    for (const r of rows)
+      console.log(`  ${fmt(r.input).padStart(6)}  ${pct(r.input, total).padStart(5)}  ${String(r.sessions).padStart(8)}  ${fmt(r.startMedian).padStart(9)}  ${String(r.over150k).padStart(5)}  ${cut(r.topTool, 30).padEnd(30)} ${String(r.cuts).padStart(4)}  ${r.project}`);
+    console.log(dim('\n  Details for one project: token-diet --project "<path>"'));
+    return;
   }
 
   const dir = projectDir(CWD);
