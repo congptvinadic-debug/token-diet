@@ -8,6 +8,7 @@ import { fmt, median, pct } from '../lib/util.js';
 import { loadConfig } from '../lib/hook.js';
 import { install, uninstall } from '../lib/install.js';
 import { ALIAS_MODEL, modelUsage, summarize } from '../lib/models.js';
+import { toolUsage } from '../lib/tools.js';
 
 const argv = process.argv.slice(2);
 const VALUE_FLAGS = new Set(['--days', '--project', '--top']);
@@ -29,7 +30,7 @@ const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 const HELP = `${bold('token-diet')}: find where your coding agent's tokens go, and what to cut
 
   ${cyan('token-diet')}                    context files + the last 7 days of Claude Code sessions in this project
-  ${cyan('token-diet context')}            only the instruction files and MCP servers loaded every session
+  ${cyan('token-diet context')}            instruction files, MCP servers, and tools loaded every session but rarely used
   ${cyan('token-diet sessions')}           one line per session: requests, tokens, peak context
   ${cyan('token-diet session <id>')}       one session in detail (id prefix is enough)
   ${cyan('token-diet now')}                what fills the context of your latest session, like /context, and what to cut
@@ -64,6 +65,27 @@ function printContext(ctx) {
     for (const l of ctx.dupExamples) console.log(dim(`    "${l}"`));
   }
   if (ctx.mcp.length) console.log(`  MCP servers configured: ${ctx.mcp.map((m) => m.name).join(', ')} ${dim('(each adds its tool definitions to every request)')}`);
+}
+
+// Tool definitions sent with every request that the agent (almost) never calls.
+function printToolUsage(u) {
+  if (!u.conversations) return;
+  const rare = (x) => x.usedIn / x.loadedIn < 0.1;
+  const rows = [...u.servers.map((x) => ({ ...x, label: `MCP ${x.name}` })), ...u.builtins.map((x) => ({ ...x, label: x.name }))]
+    .filter((x) => x.tokens >= 200 && x.loadedIn >= 3 && rare(x))
+    .sort((a, b) => b.tokens * b.loadedIn - a.tokens * a.loadedIn);
+  heading(`Tools loaded but rarely used (${u.conversations} conversations, last ${DAYS} days)`);
+  if (!rows.length) return console.log(dim('  Every tool definition sent with your requests gets used. Nothing to cut here.'));
+  console.log(dim('  ~tokens  loaded in  used in  calls  tool'));
+  for (const x of rows.slice(0, 12)) {
+    const t = x.tokens >= 2000 ? yellow(`~${fmt(x.tokens)}`) : `~${fmt(x.tokens)}`;
+    const src = x.source ? dim(` (${x.source === 'config' ? 'your MCP config' : 'from the app or a plugin'})`) : '';
+    console.log(`  ${t.padStart(color ? 16 : 7)}  ${String(x.loadedIn).padStart(9)}  ${String(x.usedIn).padStart(7)}  ${String(x.calls).padStart(5)}  ${x.label}${x.tools > 1 ? dim(` ${x.tools} tools`) : ''}${src}`);
+  }
+  const total = rows.reduce((s, x) => s + x.tokens, 0);
+  console.log(dim(`  Up to ~${fmt(total)} tokens in the context of each conversation that loads them; subagents load their own copy.`));
+  console.log(dim(`  Cut: remove MCP servers you added with \`claude mcp remove <name>\` or turn them off in /mcp; turn off plugins or app connectors you`));
+  console.log(dim(`  do not use; for a built-in tool, start with --disallowedTools <name> or add it to "permissions.deny" in settings.`));
 }
 
 // Split of the request's fixed part (system prompt + tool definitions), as shares of characters. Shares, not token counts:
@@ -313,7 +335,10 @@ async function main() {
 
   if (cmd === 'context') {
     const ctx = auditContext(CWD);
-    return JSON_OUT ? console.log(JSON.stringify(ctx, null, 2)) : printContext(ctx);
+    const tools = await toolUsage(listSessions(projectDir(CWD), DAYS), ctx.mcp);
+    if (JSON_OUT) return console.log(JSON.stringify({ ...ctx, tools }, null, 2));
+    printContext(ctx);
+    return printToolUsage(tools);
   }
 
   if (cmd === 'all') {
@@ -377,8 +402,10 @@ async function main() {
 
   const ctx = auditContext(CWD);
   const f = findings(list);
-  if (JSON_OUT) return console.log(JSON.stringify({ context: ctx, sessions: list.map(({ results, ...s }) => s), findings: f }, null, 2));
+  const tools = await toolUsage(listSessions(dir, DAYS), ctx.mcp);
+  if (JSON_OUT) return console.log(JSON.stringify({ context: ctx, tools, sessions: list.map(({ results, ...s }) => s), findings: f }, null, 2));
   printContext(ctx);
+  printToolUsage(tools);
   if (!list.length) {
     console.log(dim(`\n  No Claude Code sessions for ${CWD} in the last ${DAYS} days (looked in ${dir}).`));
     return;

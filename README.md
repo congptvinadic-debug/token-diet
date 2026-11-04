@@ -35,6 +35,21 @@ What to cut
        of telling it to read the file.
 ```
 
+## Tools you load but never call
+
+Every tool definition goes out with every request, called or not. `token-diet context` counts, from the transcripts, which
+tools each conversation started with and which it called:
+
+```
+Tools loaded but rarely used (235 conversations, last 7 days)
+  ~tokens  loaded in  used in  calls  tool
+    ~9.3k        138        3     16  Artifact
+    ~1.3k        162        0      0  Workflow
+    ~1.0k        138        0      0  MCP visualize 2 tools (from the app or a plugin)
+```
+
+Tools loaded later through tool search are not counted: they cost nothing until used.
+
 ## What is in your context right now
 
 ```
@@ -95,6 +110,9 @@ project only, `token-diet uninstall` removes them). Use one or the other; if bot
 - **Output clip.** A Bash or PowerShell output over 16k characters (~4k tokens) is saved to `~/.claude/token-diet/out/` and
   the agent sees the first 60 and last 60 lines plus the file path, so it can grep the rest only if it needs it. End a
   command with `# full` to keep the whole output. Saved outputs are deleted after 7 days.
+  MCP tools (browser page text, screenshots with text, search results) get the same treatment past 24k characters: the
+  start and end of the text are kept, images and other blocks pass through, errors are never cut. Tools you always want
+  whole go in `mcpKeep` (e.g. `["get_page_text"]`).
 - **Handoff: long context on disk, not in the next session.** On `/clear`, `/compact` or exit, a script (no model call, no
   tokens) reads the transcript and writes `~/.claude/token-diet/handoff/<project>/<time>.md` (about 5k characters): the
   plan, the agent's last reply, what was still open before the last `/compact` (its "Pending Tasks" and "Current Work"
@@ -111,15 +129,16 @@ project only, `token-diet uninstall` removes them). Use one or the other; if bot
   The script does not know *why* you decided something. For that, pass a note: `/compact <one line>` keeps it in the
   handoff, or say it in your last message before `/clear`.
 
-Limits live in `~/.claude/token-diet/config.json`: `compactAt`, `every`, `clipChars`, `headLines`, `tailLines`, `handoff`
-(true/false), `handoffHours`. Any error in a hook means "no change". In Claude Code, `/token-diet:check [now|models|sessions]`
+Limits live in `~/.claude/token-diet/config.json`: `compactAt`, `every`, `clipChars`, `headLines`, `tailLines`,
+`mcpClipChars`, `mcpKeep`, `handoff` (true/false), `handoffHours`. Any error in a hook means "no change". Installed both
+as a plugin and with `token-diet install`, each event still runs once. In Claude Code, `/token-diet:check [now|models|sessions]`
 runs the report below without leaving the session.
 
 ## Commands
 
 ```
 token-diet                    context files + the last 7 days of sessions in this project
-token-diet context            only the instruction files and MCP servers loaded every session
+token-diet context            instruction files, MCP servers, and tools loaded every session but rarely used
 token-diet sessions           one line per session: requests, tokens, cache share, start and peak context
 token-diet session <id>       one session in detail (an id prefix is enough)
 token-diet now                what fills the context of your latest session (like /context), and what to cut
@@ -154,3 +173,8 @@ Claude Code only for now. Pull requests welcome.
 - How much usage each plan gives, with sources: [getstackversus.com/limits](https://getstackversus.com/limits).
 
 MIT license.
+
+## Tests
+
+`npm test` (Node's built-in runner, no dependencies). Hooks are tested against a throwaway home directory, never your real
+`~/.claude`.
