@@ -36,8 +36,9 @@ const HELP = `${bold('token-diet')}: find where your coding agent's tokens go, a
   ${cyan('token-diet all')}                every project on this machine, biggest token users first
   ${cyan('token-diet models')}             which model did what kind of work, its API cost, and where a cheaper model
                                 would likely do (--all: every project)
-  ${cyan('token-diet install')}            add Claude Code hooks: a /compact reminder past 150k, and clipping of huge
-                                command outputs (full text kept in a file). --here: this project only, --no-clip
+  ${cyan('token-diet install')}            add Claude Code hooks: a /compact reminder past 150k, clipping of huge command
+                                outputs, and a handoff file on /clear. --here, --no-clip, --no-handoff
+                                (or the plugin: /plugin install token-diet --marketplace congptvinadic-debug/token-diet)
   ${cyan('token-diet uninstall')}          remove them
 
   --days <n>        look back n days (default 7)      --project <dir>   another project (default: current dir)
@@ -288,13 +289,15 @@ async function main() {
       const r = uninstall({ projectCwd });
       return console.log(r.removed ? `Removed token-diet hooks from ${r.settings}` : `No token-diet hooks in ${r.settings}`);
     }
-    const r = install({ projectCwd, clip: !flags.has('--no-clip') });
+    const r = install({ projectCwd, clip: !flags.has('--no-clip'), handoff: !flags.has('--no-handoff') });
     const cfg = loadConfig();
     console.log(`${green('Installed')} in ${r.settings} (backup next to it as .token-diet.bak)\n`);
     console.log(`  ${bold('Compact reminder')}  when a session's context passes ${fmt(cfg.compactAt)} tokens, you get a line telling you to run /compact`);
     console.log(`                    (again every +${fmt(cfg.every)}, not on every message), at the end of the agent's turn.`);
     if (!flags.has('--no-clip'))
       console.log(`  ${bold('Output clip')}       Bash/PowerShell output over ${fmt(cfg.clipChars)} chars (~${fmt(cfg.clipChars / 4)} tokens) is saved to a file and the agent sees the\n                    first ${cfg.headLines} and last ${cfg.tailLines} lines plus the path. End a command with "# full" to keep it whole.`);
+    if (!flags.has('--no-handoff'))
+      console.log(`  ${bold('Handoff')}           on /clear, /compact or exit a script writes the session's messages, plan, files and commits to\n                    ~/.claude/token-diet/handoff/; after /clear the new session starts with a ~1k-token summary and the path.`);
     console.log(dim(`\n  Settings: ${r.config}\n  New sessions pick the hooks up; remove them with: token-diet uninstall${projectCwd ? ' --here' : ''}`));
     return;
   }

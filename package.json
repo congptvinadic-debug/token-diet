@@ -1,7 +1,7 @@
 {
   "name": "token-diet",
-  "version": "1.0.0",
-  "description": "Find where your coding agent's tokens go and what to cut: instruction files, MCP tool definitions, huge command outputs, re-read files and oversized sessions, from Claude Code's local logs.",
+  "version": "1.1.0",
+  "description": "Spend fewer tokens in Claude Code: see where they go (instruction files, MCP tools, huge outputs, model per task), get a /compact reminder, clip huge outputs, and keep long context on disk with a handoff file. CLI and Claude Code plugin.",
   "type": "module",
   "bin": {
     "token-diet": "bin/token-diet.js"
@@ -9,6 +9,9 @@
   "files": [
     "bin",
     "lib",
+    ".claude-plugin",
+    "hooks",
+    "skills",
     "README.md",
     "LICENSE"
   ],
@@ -23,7 +26,10 @@
     "mcp",
     "llm",
     "cost",
-    "cli"
+    "cli",
+    "claude-code-plugin",
+    "handoff",
+    "hooks"
   ],
   "homepage": "https://github.com/congptvinadic-debug/token-diet",
   "repository": {

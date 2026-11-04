@@ -77,24 +77,42 @@ mixed. Search goes to Haiku (subagents) or Sonnet (sessions), commands to Sonnet
 keeps its model. Costs use Anthropic list prices; on a subscription they show how fast each model draws down your limits.
 These are suggestions from the shape of the work, not a quality check: try the cheaper model on a few runs first.
 
-## Make it automatic
+## Make it automatic (Claude Code plugin)
 
 ```
-npx token-diet install
+/plugin install token-diet --marketplace congptvinadic-debug/token-diet
 ```
 
-Adds Claude Code hooks to `~/.claude/settings.json` (`--here` for this project only, `token-diet uninstall` removes them):
+(On Claude Code older than 2.1.275: `/plugin marketplace add congptvinadic-debug/token-diet`, then `/plugin install token-diet@token-diet`.)
+That is all: the hooks below run from the next session, nothing to edit, and `/plugin` turns them off or removes them.
+Without the plugin system, `npx token-diet install` writes the same hooks into `~/.claude/settings.json` (`--here` for this
+project only, `token-diet uninstall` removes them). Use one or the other; if both are there, only the plugin's hooks run.
 
-- **Compact reminder.** When a session's context passes 150k tokens you get a one-line note to run `/compact`, again every
-  +50k, not on every message. It shows when the agent finishes its turn (Stop hook), and the agent repeats it in its next
-  reply, for apps that do not show hook messages. Only you can run `/compact`, but on a week of real sessions compacting at 150k would have cut
-  input tokens by about half.
+- **Compact reminder.** When a session's context passes 150k tokens you get a one-line note to run `/compact` or `/clear`,
+  again every +50k, not on every message. It shows when the agent finishes its turn, and the agent repeats it in its next
+  reply, for apps that do not show hook messages. On a week of real sessions, compacting at 150k would have cut input
+  tokens by about half.
 - **Output clip.** A Bash or PowerShell output over 16k characters (~4k tokens) is saved to `~/.claude/token-diet/out/` and
   the agent sees the first 60 and last 60 lines plus the file path, so it can grep the rest only if it needs it. End a
   command with `# full` to keep the whole output. Saved outputs are deleted after 7 days.
+- **Handoff: long context on disk, not in the next session.** On `/clear`, `/compact` or exit, a script (no model call, no
+  tokens) reads the transcript and writes `~/.claude/token-diet/handoff/<project>/<time>.md`: your messages, the plan,
+  files changed, commits, commands, the agent's last reply and the earlier compact summary. API keys and tokens are
+  redacted. After `/clear` the new session starts with a ~1k-token version and the file path, and reads or greps the
+  file only when it needs a detail. A fresh session in the same project within 12 hours gets only the path.
 
-Limits live in `~/.claude/token-diet/config.json`: `compactAt`, `every`, `clipChars`, `headLines`, `tailLines`. The hook
-script is copied next to it, so it keeps working without the npm package, and any error in it means "no change".
+  | | `/compact` | `/clear` with handoff |
+  |---|---|---|
+  | Next session starts with | the model's summary, often 10-20k tokens | ~1-2k tokens |
+  | Cost of making it | the model reads the whole context and writes the summary | none, a script |
+  | Details | what the summary left out is gone | all on disk |
+
+  The script does not know *why* you decided something. For that, pass a note: `/compact <one line>` keeps it in the
+  handoff, or say it in your last message before `/clear`.
+
+Limits live in `~/.claude/token-diet/config.json`: `compactAt`, `every`, `clipChars`, `headLines`, `tailLines`, `handoff`
+(true/false), `handoffHours`. Any error in a hook means "no change". In Claude Code, `/token-diet:check [now|models|sessions]`
+runs the report below without leaving the session.
 
 ## Commands
 
@@ -106,7 +124,7 @@ token-diet session <id>       one session in detail (an id prefix is enough)
 token-diet now                what fills the context of your latest session (like /context), and what to cut
 token-diet all                every project on this machine, biggest token users first
 token-diet models             model per kind of work, API cost, cheaper-model suggestions (--all: every project)
-token-diet install            add the hooks above (--here: this project only, --no-clip: reminder only)
+token-diet install            add the hooks above without the plugin (--here, --no-clip, --no-handoff)
 token-diet uninstall          remove them
 
 --days <n>   look back n days (default 7)     --project <dir>   another project

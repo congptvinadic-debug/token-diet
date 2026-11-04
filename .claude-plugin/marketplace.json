@@ -1,0 +1,12 @@
+{
+  "name": "token-diet",
+  "description": "token-diet: fewer tokens per Claude Code session.",
+  "owner": { "name": "StackVersus", "url": "https://getstackversus.com" },
+  "plugins": [
+    {
+      "name": "token-diet",
+      "source": "./",
+      "description": "A /compact reminder past 150k, clipping of huge command outputs, and a handoff file so /clear keeps your context on disk."
+    }
+  ]
+}
