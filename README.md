@@ -57,6 +57,26 @@ What to cut in this context
      → Run /compact with a one-line note of what you are doing (it keeps a summary), or /clear when you move to another task.
 ```
 
+## Which model for which work
+
+```
+$ token-diet models
+Models, last 7 days: $685 at API list prices
+  claude-opus-5-5        session       3967   1.0B   2.9M   $308  45%
+  claude-fable-5-1       session       1321 307.6M   1.4M   $202  30%
+  claude-opus-5-5        subagent      2122 197.1M   1.0M   $100  15%
+  ...
+Where a cheaper model would likely do
+  1. x-agent ran 52x as a general-purpose subagent on claude-opus-5-5, but .claude/agents/x-agent.md asks for model: sonnet.  -$21.14
+     → Spawn it as its own agent type (subagent_type "x-agent"), not "read .claude/agents/x-agent.md and follow it".
+  2. 3 subagents on opus only searched and read files ($6.80). On claude-haiku-5-5: $0.24.  -$6.55
+```
+
+Each session and subagent is sorted by what its tool calls show: searching and reading, running commands, editing code, or
+mixed. Search goes to Haiku (subagents) or Sonnet (sessions), commands to Sonnet, Fable outside coding to Opus; code editing
+keeps its model. Costs use Anthropic list prices; on a subscription they show how fast each model draws down your limits.
+These are suggestions from the shape of the work, not a quality check: try the cheaper model on a few runs first.
+
 ## Make it automatic
 
 ```
@@ -84,6 +104,7 @@ token-diet sessions           one line per session: requests, tokens, cache shar
 token-diet session <id>       one session in detail (an id prefix is enough)
 token-diet now                what fills the context of your latest session (like /context), and what to cut
 token-diet all                every project on this machine, biggest token users first
+token-diet models             model per kind of work, API cost, cheaper-model suggestions (--all: every project)
 token-diet install            add the hooks above (--here: this project only, --no-clip: reminder only)
 token-diet uninstall          remove them
 

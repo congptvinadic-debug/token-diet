@@ -7,6 +7,7 @@ import { analyzeSession, CARRY, compactSavings, findings, listProjects, listSess
 import { fmt, median, pct } from '../lib/util.js';
 import { loadConfig } from '../lib/hook.js';
 import { install, uninstall } from '../lib/install.js';
+import { ALIAS_MODEL, modelUsage, summarize } from '../lib/models.js';
 
 const argv = process.argv.slice(2);
 const VALUE_FLAGS = new Set(['--days', '--project', '--top']);
@@ -33,6 +34,8 @@ const HELP = `${bold('token-diet')}: find where your coding agent's tokens go, a
   ${cyan('token-diet session <id>')}       one session in detail (id prefix is enough)
   ${cyan('token-diet now')}                what fills the context of your latest session, like /context, and what to cut
   ${cyan('token-diet all')}                every project on this machine, biggest token users first
+  ${cyan('token-diet models')}             which model did what kind of work, its API cost, and where a cheaper model
+                                would likely do (--all: every project)
   ${cyan('token-diet install')}            add Claude Code hooks: a /compact reminder past 150k, and clipping of huge
                                 command outputs (full text kept in a file). --here: this project only, --no-clip
   ${cyan('token-diet uninstall')}          remove them
@@ -208,6 +211,65 @@ function printContextNow(a) {
   }
 }
 
+const usd = (n) => (n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`);
+const KIND_TEXT = {
+  search: 'only searched and read files',
+  scripts: 'mostly ran commands and scripts',
+  mixed: 'mixed work, few edits',
+  chat: 'answered without tools',
+  coding: 'edited code',
+};
+
+function printModels(sum, where) {
+  heading(`Models, last ${DAYS} days (${where}): ${usd(sum.total)} at API list prices`);
+  console.log(dim(`  On a subscription you do not pay this, but usage limits are drawn down in roughly the same proportions.`));
+  console.log(dim('\n  model                  where               requests   input    output   API cost  share'));
+  for (const g of sum.byModelWhere) {
+    const [model, w] = g.key.split('\t');
+    const input = g.input + g.cacheWrite + g.cacheRead;
+    console.log(`  ${model.padEnd(22)} ${w.padEnd(19)} ${String(g.requests).padStart(8)}  ${fmt(input).padStart(6)}  ${fmt(g.output).padStart(7)}  ${usd(g.cost).padStart(9)}  ${pct(g.cost, sum.total).padStart(5)}`);
+  }
+
+  const tips = [];
+  for (const g of sum.wrapped) {
+    const [name, want, ran] = g.key.split('\t');
+    if (!want || ran.includes(want)) continue;
+    tips.push({
+      saving: g.saving,
+      text: `${bold(name)} ran ${g.transcripts}x as a general-purpose subagent on ${ran}, but ${cyan(`.claude/agents/${name}.md`)} asks for model: ${want}.`,
+      fix: `Spawn it as its own agent type (subagent_type "${name}", or "use the ${name} agent"), not "read .claude/agents/${name}.md and follow it". Then its model: line applies.`,
+    });
+  }
+  for (const g of sum.byKind) {
+    const [w, kind, now, want] = g.key.split('\t');
+    if (!want || g.saving < 0.01) continue;
+    const fix =
+      w === 'subagent'
+        ? want === 'haiku'
+          ? 'For search/read subagents pass model "haiku" when spawning (or use the Explore agent), or put model: haiku in the agent file.'
+          : `Put model: ${want} in the agent file, or pass model "${want}" when spawning.`
+        : want === 'opus'
+          ? 'Keep Fable for the hardest coding work; switch with /model for everyday tasks.'
+          : `For sessions like these, switch with /model ${want} before you start.`;
+    tips.push({
+      saving: g.saving,
+      text: `${g.transcripts} ${w === 'subagent' ? 'subagent' : 'session'}${g.transcripts > 1 ? 's' : ''} on ${now} ${KIND_TEXT[kind]} (${usd(g.cost)}). On ${ALIAS_MODEL[want]}: ${usd(g.cost - g.saving)}.`,
+      fix,
+    });
+  }
+  tips.sort((a, b) => b.saving - a.saving);
+
+  heading('Where a cheaper model would likely do');
+  if (!tips.length) return console.log(dim('  Nothing obvious: work is already on the cheapest model that fits its kind.'));
+  const best = tips.reduce((a, t) => a + t.saving, 0);
+  tips.slice(0, Number(val('--top', 6))).forEach((t, i) => {
+    console.log(`  ${i + 1}. ${t.text}  ${green(`-${usd(t.saving)}`)}`);
+    console.log(`     ${yellow('→')} ${t.fix}`);
+  });
+  console.log(dim(`\n  Up to ${usd(Math.min(best, sum.saving))} of ${usd(sum.total)} (-${pct(Math.min(best, sum.saving), sum.total)}). Suggestions come from what the work looked like`));
+  console.log(dim(`  (tool calls), not from checking quality: try the cheaper model on a few runs first. Prices: Anthropic list, ${sum.pricesAsOf}.`));
+}
+
 async function load(days) {
   const sessions = listSessions(projectDir(CWD), days);
   const out = [];
@@ -235,6 +297,15 @@ async function main() {
       console.log(`  ${bold('Output clip')}       Bash/PowerShell output over ${fmt(cfg.clipChars)} chars (~${fmt(cfg.clipChars / 4)} tokens) is saved to a file and the agent sees the\n                    first ${cfg.headLines} and last ${cfg.tailLines} lines plus the path. End a command with "# full" to keep it whole.`);
     console.log(dim(`\n  Settings: ${r.config}\n  New sessions pick the hooks up; remove them with: token-diet uninstall${projectCwd ? ' --here' : ''}`));
     return;
+  }
+
+  if (cmd === 'models') {
+    const rows = [];
+    const projects = flags.has('--all') ? await listProjects(DAYS) : [{ cwd: CWD, sessions: listSessions(projectDir(CWD), DAYS) }];
+    for (const p of projects) rows.push(...(await modelUsage(p.sessions, p.cwd || CWD)));
+    const sum = summarize(rows);
+    if (JSON_OUT) return console.log(JSON.stringify(sum, null, 2));
+    return printModels(sum, flags.has('--all') ? 'all projects' : CWD);
   }
 
   if (cmd === 'context') {
