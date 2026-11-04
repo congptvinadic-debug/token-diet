@@ -96,9 +96,10 @@ project only, `token-diet uninstall` removes them). Use one or the other; if bot
   the agent sees the first 60 and last 60 lines plus the file path, so it can grep the rest only if it needs it. End a
   command with `# full` to keep the whole output. Saved outputs are deleted after 7 days.
 - **Handoff: long context on disk, not in the next session.** On `/clear`, `/compact` or exit, a script (no model call, no
-  tokens) reads the transcript and writes `~/.claude/token-diet/handoff/<project>/<time>.md`: your messages, the plan,
-  files changed, commits, commands, the agent's last reply and the earlier compact summary. API keys and tokens are
-  redacted. After `/clear` the new session starts with a ~1k-token version and the file path, and reads or greps the
+  tokens) reads the transcript and writes `~/.claude/token-diet/handoff/<project>/<time>.md` (about 5k characters): the
+  plan, the agent's last reply, what was still open before the last `/compact` (its "Pending Tasks" and "Current Work"
+  only), files changed, recent commits and your last 40 messages, plus the transcript path for everything else. API keys
+  and tokens are redacted. After `/clear` the new session starts with a ~1k-token version and the file path, and reads or greps the
   file only when it needs a detail. A fresh session in the same project within 12 hours gets only the path.
 
   | | `/compact` | `/clear` with handoff |
