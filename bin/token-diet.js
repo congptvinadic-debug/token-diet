@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // token-diet: find where your coding agent's tokens go, and what to cut.
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { auditContext } from '../lib/context.js';
 import { analyzeSession, CARRY, compactSavings, findings, listProjects, listSessions, projectDir, REREAD } from '../lib/sessions.js';
 import { fmt, median, pct } from '../lib/util.js';
@@ -9,9 +9,10 @@ import { loadConfig } from '../lib/hook.js';
 import { install, uninstall } from '../lib/install.js';
 import { ALIAS_MODEL, modelUsage, summarize } from '../lib/models.js';
 import { toolUsage } from '../lib/tools.js';
+import { planSplit, writeSplit } from '../lib/split.js';
 
 const argv = process.argv.slice(2);
-const VALUE_FLAGS = new Set(['--days', '--project', '--top']);
+const VALUE_FLAGS = new Set(['--days', '--project', '--top', '--keep', '--dir']);
 const flags = new Set(argv.filter((a) => a.startsWith('--')));
 const args = argv.filter((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(argv[i - 1]));
 const val = (name, def) => {
@@ -41,6 +42,9 @@ const HELP = `${bold('token-diet')}: find where your coding agent's tokens go, a
                                 outputs, and a handoff file on /clear. --here, --no-clip, --no-handoff
                                 (or the plugin: /plugin install token-diet --marketplace congptvinadic-debug/token-diet)
   ${cyan('token-diet uninstall')}          remove them
+  ${cyan('token-diet split <file.md>')}    turn a big doc that agents read whole into a short index + one file per "## " section
+                                (dry run; --write to apply). --keep <regex> keeps matching sections in the index
+                                (repeatable), --keep-last keeps the last one, --dir <d> where the sections go
 
   --days <n>        look back n days (default 7)      --project <dir>   another project (default: current dir)
   --json            machine-readable output            --no-color
@@ -63,6 +67,12 @@ function printContext(ctx) {
   if (ctx.duplicateTokens >= 50) {
     console.log(yellow(`  ~${fmt(ctx.duplicateTokens)} tokens are lines repeated across these files, e.g.:`));
     for (const l of ctx.dupExamples) console.log(dim(`    "${l}"`));
+  }
+  for (const p of ctx.pointed || []) {
+    const how = p.readFirst ? 'tells the agent to read' : 'points to';
+    console.log(red(`  ${cut(relative(CWD, p.from) || p.from, 40)} ${how} ${p.rel} (~${fmt(p.tokens)} tokens).`) +
+      dim(` Read whole, it rides along with every request until the next /compact.`));
+    console.log(`    Fix: ${cyan(`token-diet split ${p.rel}`)} ${dim('(short index + one file per section; the agent greps and reads only the part it needs)')}`);
   }
   if (ctx.mcp.length) console.log(`  MCP servers configured: ${ctx.mcp.map((m) => m.name).join(', ')} ${dim('(each adds its tool definitions to every request)')}`);
 }
@@ -322,6 +332,20 @@ async function main() {
       console.log(`  ${bold('Handoff')}           on /clear, /compact or exit a script writes the session's messages, plan, files and commits to\n                    ~/.claude/token-diet/handoff/; after /clear the new session starts with a ~1k-token summary and the path.`);
     console.log(dim(`\n  Settings: ${r.config}\n  New sessions pick the hooks up; remove them with: token-diet uninstall${projectCwd ? ' --here' : ''}`));
     return;
+  }
+
+  if (cmd === 'split') {
+    if (!args[1]) return console.log('usage: token-diet split <file.md> [--keep <regex>]... [--keep-last] [--dir <d>] [--write]');
+    const keep = argv.flatMap((a, i) => (a === '--keep' && argv[i + 1] ? [argv[i + 1]] : []));
+    const plan = planSplit(resolve(CWD, args[1]), { keep, keepLast: flags.has('--keep-last'), dir: val('--dir', null) && resolve(CWD, val('--dir')) });
+    if (JSON_OUT) return console.log(JSON.stringify({ ...plan, index: undefined, files: plan.files.map(({ text, ...f }) => f) }, null, 2));
+    heading(`${args[1]}: ~${fmt(plan.before)} tokens -> index ~${fmt(plan.after)} tokens (${plan.files.length} of ${plan.sections} sections move)`);
+    for (const f of plan.files) console.log(`  ${dim(cut(relative(CWD, f.path), 56).padEnd(56))}  ${f.heading.slice(0, 60)}`);
+    if (!flags.has('--write')) return console.log(dim(`
+  Dry run. Add --write to apply. Keep the rules and current state in the index with --keep "<heading regex>".`));
+    writeSplit(plan);
+    return console.log(green(`
+  Written: ${plan.files.length} section files in ${plan.outDir}, index in ${args[1]}. Text moved byte for byte.`));
   }
 
   if (cmd === 'models') {

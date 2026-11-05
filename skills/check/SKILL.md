@@ -10,5 +10,5 @@ Run token-diet and report what it says, in the user's language, in a few lines: 
 node "${CLAUDE_PLUGIN_ROOT}/bin/token-diet.js" <subcommand> --no-color
 ```
 
-Subcommand: $ARGUMENTS (use `now` if that is empty). `models` shows cost by model and where a cheaper one would do; `sessions` lists recent sessions; `all` covers every project.
+Subcommand: $ARGUMENTS (use `now` if that is empty). `models` shows cost by model and where a cheaper one would do; `sessions` lists recent sessions; `all` covers every project. If `context` flags a big file an instruction file says to read first, suggest `split <file>` (dry run first, then `--write`).
 Do not paste the whole output back: it is already in the context once.

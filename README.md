@@ -92,6 +92,26 @@ mixed. Search goes to Haiku (subagents) or Sonnet (sessions), commands to Sonnet
 keeps its model. Costs use Anthropic list prices; on a subscription they show how fast each model draws down your limits.
 These are suggestions from the shape of the work, not a quality check: try the cheaper model on a few runs first.
 
+## A big doc the agent reads first
+
+A line like "Read `docs/WORKFLOW.md` first" in CLAUDE.md or AGENTS.md is cheap to write and expensive to keep: the agent reads
+the whole file at the start of every session, and the file then rides along with every request until the next compaction.
+Workflow notes and handbooks grow by appending, so they get big. `token-diet context` flags any file an instruction file
+points to that is over ~5k tokens, and says when the line tells the agent to read it first.
+
+The fix is a map: a short index the agent always reads, plus one file per section that it opens only when the task needs it.
+
+```
+token-diet split docs/WORKFLOW.md                                   # dry run: what moves, tokens before and after
+token-diet split docs/WORKFLOW.md --keep "rules|current state" --keep-last --write
+```
+
+It splits on `## ` headings (sub-headings stay with their section, headings inside code fences are ignored), keeps the text
+before the first section plus the sections you name in the index, moves the rest word for word to `docs/workflow/NN-name.md`,
+and ends the index with a table of the moved files and a line telling the agent to grep them and read only the part it needs.
+It refuses to overwrite existing files. On the project behind the example above, the workflow file went from ~35k tokens
+read every session to a ~4k-token index.
+
 ## Make it automatic (Claude Code plugin)
 
 ```
@@ -146,6 +166,7 @@ token-diet all                every project on this machine, biggest token users
 token-diet models             model per kind of work, API cost, cheaper-model suggestions (--all: every project)
 token-diet install            add the hooks above without the plugin (--here, --no-clip, --no-handoff)
 token-diet uninstall          remove them
+token-diet split <file.md>    big doc -> short index + one file per section (dry run; --write, --keep <regex>, --keep-last)
 
 --days <n>   look back n days (default 7)     --project <dir>   another project
 --json       machine-readable output          --no-color
