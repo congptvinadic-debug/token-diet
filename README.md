@@ -2,6 +2,9 @@
 
 Find where your coding agent's tokens go, and what to cut.
 
+Hitting a usage limit? What each Claude, ChatGPT/Codex, Cursor and Copilot plan actually allows, with sources and a change log:
+[getstackversus.com/limits](https://getstackversus.com/limits).
+
 ```
 npx claude-token-diet
 ```
