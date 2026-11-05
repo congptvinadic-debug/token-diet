@@ -114,11 +114,15 @@ read every session to a ~4k-token index.
 
 ## Make it automatic (Claude Code plugin)
 
+token-diet is not in Anthropic's plugin directory, so add its marketplace first, then install. In Claude Code:
+
 ```
-/plugin install token-diet --marketplace congptvinadic-debug/token-diet
+/plugin marketplace add congptvinadic-debug/token-diet
+/plugin install token-diet@token-diet
 ```
 
-(On Claude Code older than 2.1.275: `/plugin marketplace add congptvinadic-debug/token-diet`, then `/plugin install token-diet@token-diet`.)
+From a terminal: `claude plugin marketplace add congptvinadic-debug/token-diet`, then `claude plugin install token-diet@token-diet`.
+Installing before the marketplace is added fails with "Couldn't find plugin token-diet".
 That is all: the hooks below run from the next session, nothing to edit, and `/plugin` turns them off or removes them.
 Without the plugin system, `npx claude-token-diet install` writes the same hooks into `~/.claude/settings.json` (`--here` for this
 project only, `token-diet uninstall` removes them). Use one or the other; if both are there, only the plugin's hooks run.

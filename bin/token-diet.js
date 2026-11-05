@@ -40,7 +40,7 @@ const HELP = `${bold('token-diet')}: find where your coding agent's tokens go, a
                                 would likely do (--all: every project)
   ${cyan('token-diet install')}            add Claude Code hooks: a /compact reminder past 150k, clipping of huge command
                                 outputs, and a handoff file on /clear. --here, --no-clip, --no-handoff
-                                (or the plugin: /plugin install token-diet --marketplace congptvinadic-debug/token-diet)
+                                (or the plugin: /plugin marketplace add congptvinadic-debug/token-diet, then /plugin install token-diet@token-diet)
   ${cyan('token-diet uninstall')}          remove them
   ${cyan('token-diet split <file.md>')}    turn a big doc that agents read whole into a short index + one file per "## " section
                                 (dry run; --write to apply). --keep <regex> keeps matching sections in the index
